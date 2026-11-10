@@ -56,6 +56,33 @@
   .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
   .facts div { font-size: 11px; color: var(--mute); }
   .facts b { display: block; font-family: var(--mono); font-size: 14px; color: var(--ink); font-weight: 600; }
+  .cap { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--mute); margin: 0 0 4px; }
+  .cap b { color: var(--ink); font-weight: 700; }
+  .nm { margin-top: 12px; }
+  .news { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--mute); min-width: 0; }
+  .nhead { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+  summary.nhead { cursor: pointer; list-style: none; border-radius: 6px; }
+  summary.nhead::-webkit-details-marker { display: none; }
+  summary.nhead::after { content: "▸"; margin-left: auto; padding-left: 6px; color: var(--mute); }
+  details[open] > summary.nhead::after { content: "▾"; }
+  summary.nhead:focus-visible { outline: 2px solid var(--pitch); outline-offset: 3px; }
+  .nhead .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--mute); transform: translateY(-1px); }
+  .nhead .dot.ok { background: var(--pitch); } .nhead .dot.wn { background: var(--warn); }
+  .nhead .dot.no { background: transparent; border: 1px solid var(--mute); }
+  .nhead .t { min-width: 0; } .nhead .t b { color: var(--ink); font-weight: 700; }
+  .nbody { margin-top: 8px; overflow-wrap: anywhere; }
+  .nbody p { margin: 0 0 6px; }
+  .nbody .mono { font-family: var(--mono); font-size: 11px; }
+  .nside { margin: 10px 0 4px; color: var(--ink); font-weight: 700; font-size: 12px; }
+  .nlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .nlist li { background: #0d1311; border: 1px solid var(--line); border-left: 3px solid var(--mute); border-radius: 8px; padding: 7px 9px; }
+  .nlist li.u { border-left-color: var(--pitch); } .nlist li.s { border-left-color: var(--warn); }
+  .nlist .who { color: var(--ink); font-weight: 700; font-size: 13px; }
+  .nlist .tag { float: right; margin-left: 8px; font-size: 11px; font-weight: 700; color: var(--mute); }
+  .nlist li.u .tag { color: var(--pitch); } .nlist li.s .tag { color: var(--warn); }
+  .nlist div { margin-top: 2px; }
+  .news a { color: var(--away); text-decoration: underline; text-underline-offset: 2px; }
+  .nerr { margin: 0 0 6px; padding-left: 16px; }
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
   .stat b { display: block; font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -.02em; }
@@ -113,6 +140,7 @@
   <footer>
     <p><b>ეს არის სტატისტიკური ანალიტიკა და არა ფსონის რჩევა.</b> მოდელის ალბათობა შეფასებაა და შეიძლება მცდარი იყოს; ბაზრისგან განსხვავება თავისთავად მომგებიან შესაძლებლობას არ ნიშნავს.</p>
     <p>მეთოდი: დინამიკური Dixon–Coles (დროითი წონა, ρ-კორექცია, დაწინაურებული გუნდების prior). ყოველი პროგნოზი, მათ შორის წარსული ტურების, ეყრდნობა მხოლოდ იმ დღემდე ცნობილ შედეგებს. მონაცემები: football-data.co.uk. ჰიპერპარამეტრები დროებითია, სანამ ეტაპი 1-ის მორგება რეალურ მონაცემზე არ დასრულდება.</p>
+    <p>სიახლეების ფაქტები იწერება მატჩამდე გამოქვეყნებული წყაროებიდან და ალბათობას მხოლოდ წინასწარ დადგენილი წესებით ცვლის. ფაქტთან მითითებული ბმული წყაროს მისამართია: მოწმდება მხოლოდ მისი ფორმატი და დრო, შინაარსი ავტომატურად არ დასტურდება.</p>
     <p id="ver"></p>
   </footer>
 </main>
@@ -130,22 +158,161 @@ function bar(p, cls = "") {
     `<div class="${c}" style="width:${(p[i] * 100).toFixed(1)}%">${p[i] >= 0.12 ? pct(p[i]) : ""}</div>`).join("") + `</div>`;
 }
 
-function card(m) {
+// ---- სიახლეების ბლოკი: მხოლოდ აჩვენებს data.json-ის news ველს (site/news.py public_view), არაფერს ითვლის
+const isObj = x => !!x && typeof x === "object" && !Array.isArray(x);
+const probs3 = p => Array.isArray(p) && p.length === 3 && p.every(x => typeof x === "number" && isFinite(x)) ? p : null;
+const POS = {GK: "მეკარე", DEF: "მცველი", MID: "ნახევარმცველი", FWD: "თავდამსხმელი"};
+const ROLE = {key: "ძირითადი", regular: "ხშირად თამაშობს", rotation: "როტაციის"};
+const ABS = {out: "არ ითამაშებს", doubtful: "საეჭვოა"};
+const WHY = {injury: "ტრავმა", suspension: "დისკვალიფიკაცია", other: "სხვა მიზეზი"};
+const CTX = {congestion: "დატვირთული განრიგი", manager_change: "მწვრთნელის ცვლილება", morale: "განწყობა", other: "სხვა კონტექსტი"};
+const CONF = {low: "დაბალი", medium: "საშუალო", high: "მაღალი"};
+const TIME_FIELD = {published: "გამოქვეყნების დრო", collected_at: "შეგროვების დრო", prediction_at: "პროგნოზის დრო", kickoff: "მატჩის დაწყების დრო"};
+const TIME_ERR = {time_unknown: "ცნობილია მხოლოდ თარიღი, საათი არა", timezone_unknown: "სასაათო სარტყლის გარეშეა",
+  invalid_timestamp: "არასწორი ფორმატითაა", missing_timestamp: "მითითებული არ არის", after_prediction: "პროგნოზის მომენტზე გვიანია"};
+const SKIP = {
+  invalid_source_url: "წყაროს ბმული აკლია ან არასწორი ფორმატისაა",
+  published_after_collection: "გამოქვეყნების დრო შეგროვების დროზე გვიანია",
+  duplicate_absence: "იმავე მოთამაშეზე სხვა, უფრო ახალი ცნობაა გამოყენებული",
+  duplicate_congestion: "დატვირთული განრიგი გუნდზე ერთხელ ითვლება",
+  context_has_no_numeric_rule: "ამ ტიპის კონტექსტს რიცხვითი წესი არ აქვს; მხოლოდ საინფორმაციოა",
+  insufficient_confidence: "სანდოობა დაბალია",
+  no_numeric_effect: "რიცხვითი გავლენა არ აქვს",
+  invalid_fact_object: "ჩანაწერი არასწორი ფორმისაა",
+  invalid_player: "მოთამაშის სახელი აკლია", invalid_position: "პოზიცია უცნობია", invalid_role: "როლი უცნობია",
+  invalid_status: "სტატუსი უცნობია", invalid_reason: "არყოფნის მიზეზი უცნობია",
+  invalid_context_type: "კონტექსტის ტიპი უცნობია", invalid_confidence: "სანდოობა მითითებული არ არის",
+  invalid_context_detail: "აღწერა აკლია",
+  invalid_team_object: "გუნდის ჩანაწერი არასწორი ფორმისაა", invalid_team_name: "გუნდის სახელი აკლია",
+  invalid_absences_list: "არმყოფთა სია აკლია ან არასწორია", invalid_context_list: "კონტექსტის სია აკლია ან არასწორია",
+  unexpected_team: "ფაილში სხვა გუნდია მითითებული", duplicate_team: "გუნდი ფაილში ორჯერ წერია",
+  collection_metadata_missing: "ფაილი ცარიელია: არ ჩანს, ჩატარდა თუ არა კვლევა",
+  invalid_json: "ფაქტების ფაილი ვერ წაიკითხა (არასწორი JSON)", invalid_json_structure: "ფაქტების ფაილი არასწორი სტრუქტურისაა",
+  unreadable_fact_file: "ფაქტების ფაილი ვერ წაიკითხა",
+  prediction_not_before_kickoff: "პროგნოზის მომენტი მატჩის დაწყებამდე არ არის",
+};
+function why(code) {
+  if (typeof code !== "string" || !code) return "მიზეზი ჩანაწერში არ არის";
+  const c = code.split(":")[0];
+  if (SKIP[c]) return SKIP[c];
+  const t = /^(published|collected_at|prediction_at|kickoff)_(.+)$/.exec(c);
+  if (t && TIME_ERR[t[2]]) return `${TIME_FIELD[t[1]]} ${TIME_ERR[t[2]]}`;
+  return `ვალიდაცია ვერ გაიარა (${esc(c)})`;
+}
+function known(v) {                        // დროს არ ვიგონებთ: რაც უცნობია, ასე იწერება
+  if (typeof v !== "string" || !v.trim()) return "უცნობია";
+  const d0 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (d0) return `${+d0[3]} ${MONTHS[+d0[2] - 1] || d0[2]} ${d0[1]}, საათი უცნობია`;
+  const d = new Date(v);
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(v) || isNaN(d)) return `${esc(v)} (სასაათო სარტყელი ან ფორმატი გაურკვეველია)`;
+  const z = n => String(n).padStart(2, "0");
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${z(d.getUTCHours())}:${z(d.getUTCMinutes())} UTC`;
+}
+function srcLink(u) {
+  let host = "";
+  try { const p = new URL(u); if (/^https?:$/.test(p.protocol) && !p.username && !p.password) host = p.hostname; } catch (e) {}
+  return typeof u === "string" && host
+    ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer nofollow">${esc(host)}</a>`
+    : "მითითებული არ არის";
+}
+const sg = x => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(2);
+function newsItem(it) {
+  if (!isObj(it)) return "";
+  const txt = v => typeof v === "string" && v.trim() ? esc(v.trim()) : "";
+  let who, sub;
+  if (it.kind === "context" || (!it.kind && !it.player)) {
+    who = CTX[it.type] || txt(it.type) || "კონტექსტი";
+    sub = [txt(it.detail), it.confidence ? `სანდოობა: ${CONF[it.confidence] || txt(it.confidence)}` : ""];
+  } else {
+    who = txt(it.player) || "მოთამაშე მითითებული არ არის";
+    sub = [[POS[it.position] || txt(it.position), ROLE[it.role] || txt(it.role)].filter(Boolean).join(", "),
+           [ABS[it.status] || txt(it.status), WHY[it.reason] || txt(it.reason)].filter(Boolean).join(": ")];
+  }
+  const st = it.used === true ? "u" : it.used === false ? "s" : "";
+  const num = x => typeof x === "number" && isFinite(x) ? x : 0;
+  const tail = st === "u" ? `გავლენა მოსალოდნელ გოლებზე (log): შეტევა ${sg(num(it.attack))} · დაცვა ${sg(num(it.defence))}`
+    : st === "s" ? `რატომ არ გამოიყენება: ${why(it.skip_reason || (Array.isArray(it.validation_errors) ? it.validation_errors[0] : ""))}`
+    : "ჩანაწერში არ ჩანს, გამოყენებულია თუ არა";
+  return `<li class="${st}"><span class="tag">${st === "u" ? "გამოყენებულია" : st === "s" ? "გამოტოვებულია" : "სტატუსი უცნობია"}</span>
+    <span class="who">${who}</span>
+    ${sub.filter(Boolean).map(x => `<div>${x}</div>`).join("")}
+    <div>მითითებული წყარო: ${srcLink(it.source || it.evidence)} · გამოქვეყნდა: ${known(it.published)}</div>
+    <div>${tail}</div></li>`;
+}
+function newsBlock(m, played, k, hasLayer) {
+  const n = m.news;
+  if (!isObj(n)) {                         // ძველი data.json ან მატჩი, რომელზეც ფაილი არ არსებობს
+    return played ? "" : `<div class="news"><p class="nhead"><i class="dot no"></i><span class="t"><b>სიახლეები:</b> ${hasLayer ? "ჯერ არ შეგროვებულა" : "ამ მატჩზე შეგროვებული არ არის"}</span></p></div>`;
+  }
+  const sides = [["home", m.home], ["away", m.away]].map(([key, team]) => {
+    const v = isObj(n[key]) ? n[key] : null;
+    return {team, v, items: v && Array.isArray(v.items) ? v.items.filter(isObj) : []};
+  });
+  const all = sides.flatMap(x => x.items);
+  const used = all.filter(i => i.used === true).length, skipped = all.filter(i => i.used === false).length;
+  const legacy = n.provenance_status === "legacy_unrecorded";
+  const status = legacy ? "legacy" : n.collection_status;
+  const count = all.length ? ` · ${used} გამოყენებული, ${skipped} გამოტოვებული` : "";
+  const [dot, label] = ({
+    legacy: ["", "ძველი ჩანაწერი: იმდროინდელი ფაქტები და წყაროები შენახული არ არის"],
+    not_collected: ["no", played ? "არ შეგროვებულა" : "ჯერ არ შეგროვებულა"],
+    collected_no_facts: ["ok", "კვლევა დასრულებულია, შესაბამისი ფაქტი ვერ მოიძებნა"],
+    collected_with_facts: ["ok", "კვლევა დასრულებულია" + count],
+    partially_collected: ["wn", "კვლევა ნაწილობრივია" + count],
+    invalid: ["wn", "მონაცემი არავალიდურია და ალბათობას არ ცვლის"],
+  })[status] || ["", "კვლევის სტატუსი ჩანაწერში არ არის" + count];
+
+  const body = [];
+  const times = [n.collected_at ? `შეგროვდა: ${known(n.collected_at)}` : "", n.logged_at ? `პროგნოზი ჩაიწერა: ${known(n.logged_at)}` : ""].filter(Boolean);
+  if (times.length) body.push(`<p class="mono">${times.join(" · ")}</p>`);
+  const errs = Array.isArray(n.errors) ? n.errors.filter(e => typeof e === "string") : [];
+  if (errs.length) body.push(`<ul class="nerr">${errs.map(e => `<li>${why(e)}</li>`).join("")}</ul>`);
+  for (const x of sides) {
+    const cs = x.v && x.v.collection_status;
+    const gap = cs === "not_collected" ? "ამ გუნდზე კვლევა არ ჩატარებულა"
+      : cs === "collected_no_facts" && status !== "collected_no_facts" ? "შესაბამისი ფაქტი ვერ მოიძებნა" : "";
+    if (!x.items.length && !gap) continue;
+    const order = [...x.items].sort((a, b) => (b.used === true) - (a.used === true));
+    body.push(`<div class="nside">${esc(x.team)}</div>` + (gap ? `<p>${gap}</p>` : "") +
+      (order.length ? `<ul class="nlist">${order.map(newsItem).join("")}</ul>` : ""));
+  }
+  if (all.length) body.push(`<p style="margin-top:8px">ბმული წყაროს მისამართია; მისი შინაარსი ავტომატურად არ დასტურდება.</p>`);
+
+  const head = `<i class="dot ${dot}"></i><span class="t"><b>სიახლეები:</b> ${label}</span>`;
+  const facts = body.length
+    ? `<details${!played && all.length && all.length <= 3 ? " open" : ""}><summary class="nhead">${head}</summary><div class="nbody">${body.join("")}</div></details>`
+    : `<p class="nhead">${head}</p>`;
+
+  const p = probs3(n.model);
+  let model = "";
+  if (p) {
+    const lbl = ["მასპ.", "ფრე", "სტუმ."];
+    const extra = [Array.isArray(n.xg) && n.xg.length === 2 && n.xg.every(x => typeof x === "number") ? `მოსალოდნელი გოლები ${n.xg[0].toFixed(2)} – ${n.xg[1].toFixed(2)}` : "",
+                   typeof n.over25 === "number" ? `2.5-ზე მეტი ${pct(n.over25)}` : ""].filter(Boolean).join(" · ");
+    model = `<div class="nm"><div class="cap"><b>სტატისტიკა + სიახლეები</b>${extra ? `<span>${extra}</span>` : ""}</div>${bar(p)}
+      <div class="legend">${lbl.map((l, i) => `<span class="${i === k ? "hit" : ""}">${l} ${pct(p[i])}</span>`).join("")}</div></div>`;
+  }
+  return {model, facts: `<div class="news">${facts}</div>`};
+}
+
+function card(m, hasLayer) {
   const played = !!m.result;
   const k = played ? (m.result[0] > m.result[1] ? 0 : m.result[0] === m.result[1] ? 1 : 2) : -1;
   const lbl = ["მასპ.", "ფრე", "სტუმ."];
   const legend = lbl.map((l, i) => `<span class="${i === k ? "hit" : ""}">${l} ${pct(m.model[i])}${m.market ? `<em>ბაზარი ${pct(m.market[i])}</em>` : ""}</span>`).join("");
   const mid = played ? `<span class="score res">${m.result[0]} – ${m.result[1]}</span>` : `<span class="score">vs</span>`;
+  let nb = {model: "", facts: ""};
+  try { const r = newsBlock(m, played, k, hasLayer); nb = typeof r === "string" ? {model: "", facts: r} : r; } catch (e) {}
   return `<article class="card">
     <div class="when"><span>${day(m.date)} · ${m.time}</span><span>${played ? "დასრულდა" : "UK დრო"}</span></div>
     <div class="teams"><span class="a">${esc(m.home)}</span>${mid}<span>${esc(m.away)}</span></div>
-    ${bar(m.model)}${m.market ? bar(m.market, "mk") : ""}
-    <div class="legend">${legend}</div>
+    ${nb.model ? `<div class="cap"><b>მხოლოდ სტატისტიკა</b><span>მკრთალი ზოლი: ბაზარი</span></div>` : ""}${bar(m.model)}${m.market ? bar(m.market, "mk") : ""}
+    <div class="legend">${legend}</div>${nb.model}
     <div class="facts">
       <div>მოსალოდნელი გოლები<b>${m.xg[0].toFixed(2)} – ${m.xg[1].toFixed(2)}</b></div>
       <div>2.5-ზე მეტი<b>${pct(m.over25)}${m.market_over25 != null ? ` <span style="color:var(--mute);font-size:12px">/ ${pct(m.market_over25)}</span>` : ""}</b></div>
       <div>სავარაუდო ანგარიში<b>${m.score} <span style="color:var(--mute);font-size:12px">${pct(m.score_p)}</span></b></div>
-    </div>
+    </div>${nb.facts}
   </article>`;
 }
 
@@ -156,9 +323,12 @@ function render(data, lg) {
     `განახლდა: ${data.generated_at.replace("T", " ")}<br>მონაცემი: ${lg.data_through ? day(lg.data_through) : "—"}-მდე<br>` +
     `საშინაო უპირატესობა ×${Math.exp(lg.params.home_adv).toFixed(2)} · ρ ${fmt(lg.params.rho, 3)}`;
 
+  // „ჯერ“ მხოლოდ იქ იწერება, სადაც ლიგაზე სიახლეების ფენა ჩანს (სხვა ლიგებზე ფაქტები არ გროვდება)
+  const hasLayer = !!lg.news_summary || [...(lg.upcoming || []), ...(lg.last_round || [])].some(m => isObj(m.news));
+  const cardOf = m => card(m, hasLayer);
   const next = document.getElementById("next");
   next.innerHTML = lg.upcoming.length
-    ? `<div class="grid">${lg.upcoming.map(card).join("")}</div>`
+    ? `<div class="grid">${lg.upcoming.map(cardOf).join("")}</div>`
     : `<div class="note">მომდევნო ტურის მატჩები ჯერ არ გამოქვეყნებულა (შესაძლოა ნაკრებების პაუზაა). პროგნოზები აქ ავტომატურად გამოჩნდება, როგორც კი განრიგი განახლდება.</div>`;
 
   const s = lg.summary;
@@ -177,7 +347,7 @@ function render(data, lg) {
       ` მოსალოდნელია, რომ საბაზისო მოდელი ბაზარს ვერ აჯობებს: ბაზარი ტრავმებსა და შემადგენლობას უკვე ითვალისწინებს, ეს მოდელი კი მხოლოდ შედეგებს.`
     : "შესადარებელი მონაცემი ჯერ არ არის.";
 
-  document.getElementById("last").innerHTML = lg.last_round.map(card).join("") || `<div class="note">ჯერ არცერთი მატჩი არ ჩატარებულა.</div>`;
+  document.getElementById("last").innerHTML = lg.last_round.map(cardOf).join("") || `<div class="note">ჯერ არცერთი მატჩი არ ჩატარებულა.</div>`;
 
   const max = Math.max(...lg.ratings.map(r => r.strength)), min = Math.min(...lg.ratings.map(r => r.strength));
   document.getElementById("ratings").innerHTML =
