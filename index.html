@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Footy Model — ფეხბურთის სტატისტიკური პროგნოზები</title>
+<meta name="description" content="Dixon–Coles მოდელის ალბათობები პრემიერ ლიგისა და ლიგა 1-ის მატჩებზე, ბაზართან შედარებით.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1110; --panel: #141a18; --line: #24302b; --ink: #e8efe9; --mute: #8a9a91;
+    --pitch: #2fd27a; --draw: #c9b458; --away: #5aa7ff; --warn: #ff8a5c;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); font: 15px/1.5 "Noto Sans Georgian", system-ui, sans-serif;
+         background: radial-gradient(1200px 500px at 80% -10%, #16352533, transparent), var(--bg); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  header { border-bottom: 1px solid var(--line); }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; flex-wrap: wrap; }
+  .brand { display: flex; align-items: baseline; gap: 12px; }
+  .brand b { font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+  .brand b span { color: var(--pitch); }
+  .brand small { color: var(--mute); }
+  .tabs { display: flex; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+  .tabs button { all: unset; cursor: pointer; padding: 7px 16px; border-radius: 999px; color: var(--mute); font-weight: 500; }
+  .tabs button[aria-selected="true"] { background: var(--pitch); color: #06130c; font-weight: 700; }
+  .tabs button:focus-visible { outline: 2px solid var(--pitch); outline-offset: 2px; }
+  .hero { padding: 34px 0 10px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; align-items: end; }
+  .hero h1 { margin: 0; font-size: clamp(26px, 4vw, 40px); line-height: 1.15; letter-spacing: -.02em; }
+  .hero p { color: var(--mute); margin: 10px 0 0; max-width: 56ch; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--mute); text-align: right; line-height: 1.8; }
+  h2 { font-size: 13px; letter-spacing: .02em; color: var(--mute); font-weight: 700;
+       margin: 40px 0 14px; display: flex; align-items: center; gap: 10px; }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .note { background: #1b2420; border: 1px dashed var(--line); border-radius: 12px; padding: 14px 16px; color: var(--mute); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 16px; }
+  .when { font-family: var(--mono); font-size: 12px; color: var(--mute); display: flex; justify-content: space-between; }
+  .teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 10px 0 12px; font-weight: 700; }
+  .teams .a { text-align: right; }
+  .score { font-family: var(--mono); font-size: 13px; background: #0d1311; border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; white-space: nowrap; }
+  .score.res { color: var(--ink); border-color: #3a4a42; }
+  .bar { display: flex; height: 26px; border-radius: 7px; overflow: hidden; font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  .bar div { display: flex; align-items: center; justify-content: center; min-width: 0; color: #08110c; }
+  .bar .h { background: var(--pitch); } .bar .d { background: var(--draw); } .bar .w { background: var(--away); }
+  .bar.mk { height: 8px; margin-top: 5px; opacity: .55; }
+  .bar.mk div { font-size: 0; }
+  .legend { display: grid; grid-template-columns: repeat(3, 1fr); font-size: 12px; color: var(--mute); margin-top: 6px; }
+  .legend span:nth-child(2) { text-align: center; } .legend span:nth-child(3) { text-align: right; }
+  .legend em { display: block; font-style: normal; font-size: 11px; opacity: .8; }
+  .legend .hit { color: var(--ink); font-weight: 700; }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .facts div { font-size: 11px; color: var(--mute); }
+  .facts b { display: block; font-family: var(--mono); font-size: 14px; color: var(--ink); font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .stat b { display: block; font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -.02em; }
+  .stat span { color: var(--mute); font-size: 13px; }
+  .stat small { display: block; color: var(--mute); font-family: var(--mono); font-size: 12px; margin-top: 4px; }
+  .verdict { margin-top: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { color: var(--mute); font-weight: 500; font-size: 12px; }
+  td.n, th.n { text-align: right; font-family: var(--mono); }
+  .meter { height: 6px; background: #0d1311; border-radius: 3px; overflow: hidden; min-width: 80px; }
+  .meter i { display: block; height: 100%; background: var(--pitch); }
+  .tablewrap { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px 8px; overflow-x: auto; }
+  footer { margin: 50px 0 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--mute); font-size: 13px; }
+  footer p { margin: 0 0 8px; max-width: 80ch; }
+  .key { display: inline-flex; gap: 14px; font-size: 12px; color: var(--mute); margin-bottom: 10px; flex-wrap: wrap; }
+  .key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  @media (max-width: 760px) {
+    .hero { grid-template-columns: 1fr; } .meta { text-align: left; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap top">
+    <div class="brand"><b>Footy<span>Model</span></b><small>სტატისტიკური ანალიტიკა</small></div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <h1 id="title">ფეხბურთის პროგნოზები მოდელიდან</h1>
+      <p>ალბათობები ითვლება Dixon–Coles მოდელით მხოლოდ ისტორიული შედეგებიდან. ფერადი ზოლის ქვეშ მკრთალი ზოლი ბაზრის ალბათობაა (ბუკმეკერების საშუალო, მარჟა მოხსნილია), შესადარებლად.</p>
+    </div>
+    <div class="meta" id="meta"></div>
+  </section>
+
+  <h2 id="h-next">მომდევნო ტური</h2>
+  <div class="key"><span><i style="background:var(--pitch)"></i>მასპინძელი</span><span><i style="background:var(--draw)"></i>ფრე</span><span><i style="background:var(--away)"></i>სტუმარი</span></div>
+  <div id="next"></div>
+
+  <h2>მოდელი ბაზრის წინააღმდეგ, მიმდინარე სეზონი</h2>
+  <div class="stats" id="stats"></div>
+  <div class="note verdict" id="verdict"></div>
+
+  <h2 id="h-last">ბოლო ტური: პროგნოზი და შედეგი</h2>
+  <div class="grid" id="last"></div>
+
+  <h2>გუნდების ძალა (მოდელის შეფასება)</h2>
+  <div class="tablewrap"><table id="ratings"></table></div>
+
+  <footer>
+    <p><b>ეს არის სტატისტიკური ანალიტიკა და არა ფსონის რჩევა.</b> მოდელის ალბათობა შეფასებაა და შეიძლება მცდარი იყოს; ბაზრისგან განსხვავება თავისთავად მომგებიან შესაძლებლობას არ ნიშნავს.</p>
+    <p>მეთოდი: დინამიკური Dixon–Coles (დროითი წონა, ρ-კორექცია, დაწინაურებული გუნდების prior). ყოველი პროგნოზი, მათ შორის წარსული ტურების, ეყრდნობა მხოლოდ იმ დღემდე ცნობილ შედეგებს. მონაცემები: football-data.co.uk. ჰიპერპარამეტრები დროებითია, სანამ ეტაპი 1-ის მორგება რეალურ მონაცემზე არ დასრულდება.</p>
+    <p id="ver"></p>
+  </footer>
+</main>
+
+<script>
+const pct = x => Math.round(x * 100) + "%";
+const fmt = (x, d = 3) => x == null ? "—" : Number(x).toFixed(d);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const DAYS = ["კვ", "ორშ", "სამ", "ოთხ", "ხუთ", "პარ", "შაბ"];
+const MONTHS = ["იან", "თებ", "მარ", "აპრ", "მაი", "ივნ", "ივლ", "აგვ", "სექ", "ოქტ", "ნოე", "დეკ"];
+function day(iso) { const d = new Date(iso + "T12:00:00"); return `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`; }
+
+function bar(p, cls = "") {
+  return `<div class="bar ${cls}">` + ["h", "d", "w"].map((c, i) =>
+    `<div class="${c}" style="width:${(p[i] * 100).toFixed(1)}%">${p[i] >= 0.12 ? pct(p[i]) : ""}</div>`).join("") + `</div>`;
+}
+
+function card(m) {
+  const played = !!m.result;
+  const k = played ? (m.result[0] > m.result[1] ? 0 : m.result[0] === m.result[1] ? 1 : 2) : -1;
+  const lbl = ["მასპ.", "ფრე", "სტუმ."];
+  const legend = lbl.map((l, i) => `<span class="${i === k ? "hit" : ""}">${l} ${pct(m.model[i])}${m.market ? `<em>ბაზარი ${pct(m.market[i])}</em>` : ""}</span>`).join("");
+  const mid = played ? `<span class="score res">${m.result[0]} – ${m.result[1]}</span>` : `<span class="score">vs</span>`;
+  return `<article class="card">
+    <div class="when"><span>${day(m.date)} · ${m.time}</span><span>${played ? "დასრულდა" : "UK დრო"}</span></div>
+    <div class="teams"><span class="a">${esc(m.home)}</span>${mid}<span>${esc(m.away)}</span></div>
+    ${bar(m.model)}${m.market ? bar(m.market, "mk") : ""}
+    <div class="legend">${legend}</div>
+    <div class="facts">
+      <div>მოსალოდნელი გოლები<b>${m.xg[0].toFixed(2)} – ${m.xg[1].toFixed(2)}</b></div>
+      <div>2.5-ზე მეტი<b>${pct(m.over25)}${m.market_over25 != null ? ` <span style="color:var(--mute);font-size:12px">/ ${pct(m.market_over25)}</span>` : ""}</b></div>
+      <div>სავარაუდო ანგარიში<b>${m.score} <span style="color:var(--mute);font-size:12px">${pct(m.score_p)}</span></b></div>
+    </div>
+  </article>`;
+}
+
+function render(data, lg) {
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.k === lg.key));
+  document.getElementById("title").textContent = `${lg.name} · ${lg.season}`;
+  document.getElementById("meta").innerHTML =
+    `განახლდა: ${data.generated_at.replace("T", " ")}<br>მონაცემი: ${lg.data_through ? day(lg.data_through) : "—"}-მდე<br>` +
+    `საშინაო უპირატესობა ×${Math.exp(lg.params.home_adv).toFixed(2)} · ρ ${fmt(lg.params.rho, 3)}`;
+
+  const next = document.getElementById("next");
+  next.innerHTML = lg.upcoming.length
+    ? `<div class="grid">${lg.upcoming.map(card).join("")}</div>`
+    : `<div class="note">მომდევნო ტურის მატჩები ჯერ არ გამოქვეყნებულა (შესაძლოა ნაკრებების პაუზაა). პროგნოზები აქ ავტომატურად გამოჩნდება, როგორც კი განრიგი განახლდება.</div>`;
+
+  const s = lg.summary;
+  const better = (a, b) => a < b ? "მოდელი" : "ბაზარი";
+  document.getElementById("stats").innerHTML = [
+    [s.matches, "შეფასებული მატჩი", `ბაზართან შედარებული: ${s.compared}`],
+    [fmt(s.logloss_model), "log-loss, მოდელი", `ბაზარი: ${fmt(s.logloss_market)} · ნაკლები უკეთესია`],
+    [fmt(s.rps_model, 4), "RPS, მოდელი", `ბაზარი: ${fmt(s.rps_market, 4)}`],
+    [s.top_pick_hit_rate != null ? pct(s.top_pick_hit_rate) : "—", "ფავორიტი გაიმარჯვა", "მოდელის ყველაზე სავარაუდო შედეგი"],
+  ].map(([v, l, x]) => `<div class="stat"><b>${v}</b><span>${l}</span><small>${x}</small></div>`).join("");
+  const ci = s.logloss_gap_ci95;
+  const sig = ci && (ci[0] > 0 || ci[1] < 0);
+  document.getElementById("verdict").innerHTML = s.compared
+    ? `log-loss-ით ჯერჯერობით უკეთესია <b>${better(s.logloss_model, s.logloss_market)}</b>: სხვაობა ${fmt(s.logloss_gap)}, 95% ინტერვალი [${fmt(ci[0])}, ${fmt(ci[1])}]. ` +
+      (sig ? "სხვაობა სტატისტიკურად მნიშვნელოვანია." : "ამ მოცულობაზე სხვაობა სტატისტიკურად მნიშვნელოვანი არ არის.") +
+      ` მოსალოდნელია, რომ საბაზისო მოდელი ბაზარს ვერ აჯობებს: ბაზარი ტრავმებსა და შემადგენლობას უკვე ითვალისწინებს, ეს მოდელი კი მხოლოდ შედეგებს.`
+    : "შესადარებელი მონაცემი ჯერ არ არის.";
+
+  document.getElementById("last").innerHTML = lg.last_round.map(card).join("") || `<div class="note">ჯერ არცერთი მატჩი არ ჩატარებულა.</div>`;
+
+  const max = Math.max(...lg.ratings.map(r => r.strength)), min = Math.min(...lg.ratings.map(r => r.strength));
+  document.getElementById("ratings").innerHTML =
+    `<thead><tr><th>#</th><th>გუნდი</th><th>საერთო ძალა</th><th class="n">გაიტანს / 90წთ</th><th class="n">გაუშვებს / 90წთ</th></tr></thead><tbody>` +
+    lg.ratings.map((r, i) => `<tr><td class="n">${i + 1}</td><td>${esc(r.team)}</td>
+      <td><div class="meter"><i style="width:${(8 + 92 * (r.strength - min) / (max - min || 1)).toFixed(0)}%"></i></div></td>
+      <td class="n">${r.gf90.toFixed(2)}</td><td class="n">${r.ga90.toFixed(2)}</td></tr>`).join("") +
+    `</tbody>`;
+  document.getElementById("ver").textContent = `მოდელი: ${data.model_version}`;
+}
+
+fetch("data.json", {cache: "no-cache"}).then(r => r.json()).then(data => {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = data.leagues.map(l => `<button role="tab" data-k="${l.key}">${l.name}</button>`).join("");
+  const pick = k => render(data, data.leagues.find(l => l.key === k) || data.leagues[0]);
+  tabs.onclick = e => { const b = e.target.closest("button"); if (b) { history.replaceState(null, "", "#" + b.dataset.k); pick(b.dataset.k); } };
+  pick(location.hash.slice(1));
+}).catch(() => { document.getElementById("next").innerHTML = `<div class="note">მონაცემების ჩატვირთვა ვერ მოხერხდა.</div>`; });
+</script>
+</body>
+</html>
