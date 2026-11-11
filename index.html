@@ -167,6 +167,7 @@ const ABS = {out: "არ ითამაშებს", doubtful: "საეჭ�
 const WHY = {injury: "ტრავმა", suspension: "დისკვალიფიკაცია", other: "სხვა მიზეზი"};
 const CTX = {congestion: "დატვირთული განრიგი", manager_change: "მწვრთნელის ცვლილება", morale: "განწყობა", other: "სხვა კონტექსტი"};
 const CONF = {low: "დაბალი", medium: "საშუალო", high: "მაღალი"};
+const TIER = {official: "ოფიციალური წყარო", reliable: "სანდო გამოცემა", tabloid: "ყვითელი პრესა", aggregator: "აგრეგატორი", unknown: "რეესტრში არ არის"};
 const TIME_FIELD = {published: "გამოქვეყნების დრო", collected_at: "შეგროვების დრო", prediction_at: "პროგნოზის დრო", kickoff: "მატჩის დაწყების დრო"};
 const TIME_ERR = {time_unknown: "ცნობილია მხოლოდ თარიღი, საათი არა", timezone_unknown: "სასაათო სარტყლის გარეშეა",
   invalid_timestamp: "არასწორი ფორმატითაა", missing_timestamp: "მითითებული არ არის", after_prediction: "პროგნოზის მომენტზე გვიანია"};
@@ -177,6 +178,7 @@ const SKIP = {
   duplicate_congestion: "დატვირთული განრიგი გუნდზე ერთხელ ითვლება",
   context_has_no_numeric_rule: "ამ ტიპის კონტექსტს რიცხვითი წესი არ აქვს; მხოლოდ საინფორმაციოა",
   insufficient_confidence: "სანდოობა დაბალია",
+  source_not_weighted: "წყარო რეესტრში არ არის ან მისი წონა ნულია",
   no_numeric_effect: "რიცხვითი გავლენა არ აქვს",
   invalid_fact_object: "ჩანაწერი არასწორი ფორმისაა",
   invalid_player: "მოთამაშის სახელი აკლია", invalid_position: "პოზიცია უცნობია", invalid_role: "როლი უცნობია",
@@ -237,6 +239,7 @@ function newsItem(it) {
     <span class="who">${who}</span>
     ${sub.filter(Boolean).map(x => `<div>${x}</div>`).join("")}
     <div>მითითებული წყარო: ${srcLink(it.source || it.evidence)} · გამოქვეყნდა: ${known(it.published)}</div>
+    ${typeof it.source_tier === "string" ? `<div>წყაროს დონე: ${TIER[it.source_tier] || esc(it.source_tier)}${typeof it.source_weight === "number" ? ` · წონა ×${it.source_weight.toFixed(2)}` : ""}</div>` : ""}
     <div>${tail}</div></li>`;
 }
 function newsBlock(m, played, k, hasLayer) {
@@ -267,6 +270,11 @@ function newsBlock(m, played, k, hasLayer) {
   if (times.length) body.push(`<p class="mono">${times.join(" · ")}</p>`);
   const errs = Array.isArray(n.errors) ? n.errors.filter(e => typeof e === "string") : [];
   if (errs.length) body.push(`<ul class="nerr">${errs.map(e => `<li>${why(e)}</li>`).join("")}</ul>`);
+  const sw = isObj(n.source_weighting) ? n.source_weighting : null;
+  if (sw && typeof sw.max_shift_pp === "number") {
+    const cut = typeof sw.shift_scale === "number" && sw.shift_scale < 1;
+    body.push(`<p>ფაქტის გავლენა წყაროს წონით მცირდება; სიახლეებს ალბათობის შეცვლა შეუძლია არაუმეტეს ${sw.max_shift_pp} პროცენტული პუნქტით${sw.keep_favourite ? " და ფავორიტს ვერ ცვლის" : ""}.${cut ? ` ამ მატჩზე ზღვარი ამოქმედდა: გავლენა შემცირდა ×${sw.shift_scale.toFixed(2)}-მდე.` : ""}</p>`);
+  }
   for (const x of sides) {
     const cs = x.v && x.v.collection_status;
     const gap = cs === "not_collected" ? "ამ გუნდზე კვლევა არ ჩატარებულა"
