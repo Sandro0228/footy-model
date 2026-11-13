@@ -64,6 +64,9 @@
   .press-toggle.on { display: flex; }
   .press-toggle input { accent-color: var(--pitch); width: 18px; height: 18px; flex: none; margin: 0; }
   .press-toggle b { color: var(--ink); }
+  .spark { display: block; width: 100%; height: 64px; margin: 6px 0 2px; background: #0d1311; border: 1px solid var(--line); border-radius: 8px; }
+  .mvtag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid var(--line); color: var(--mute); }
+  .mvtag.notable { color: var(--draw); border-color: var(--draw); } .mvtag.strong { color: var(--warn); border-color: var(--warn); }
   .press { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
   .press .nside { margin-top: 8px; }
   .news { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--mute); min-width: 0; }
@@ -134,6 +137,8 @@
   <div class="key"><span><i style="background:var(--pitch)"></i>მასპინძელი</span><span><i style="background:var(--draw)"></i>ფრე</span><span><i style="background:var(--away)"></i>სტუმარი</span></div>
   <label class="press-toggle" id="press-toggle"><input type="checkbox" id="press-on">
     <span><b>პრეს-ფაქტორი.</b> დაამატე მოდელს პრესის ცნობების სავარაუდო გავლენა (ფინანსური კრიზისი, უთანხმოება გუნდში, მწვრთნელის მდგომარეობა და სხვა). ნაგულისხმევად გამორთულია: ეს ცნობები დადასტურებული ფაქტი არ არის.</span></label>
+  <label class="press-toggle" id="market-toggle"><input type="checkbox" id="market-on">
+    <span><b>ბაზრის დინამიკა.</b> აჩვენე, როგორ შეიცვალა კოეფიციენტი პირველი დაფიქსირებიდან, და გადაწიე მოდელის ალბათობა იმავე მიმართულებით. ნაგულისხმევად გამორთულია.</span></label>
   <div id="next"></div>
 
   <h2>მოდელი ბაზრის წინააღმდეგ, მიმდინარე სეზონი</h2>
@@ -257,6 +262,41 @@ function newsItem(it) {
     ${typeof it.source_tier === "string" ? `<div>წყაროს დონე: ${TIER[it.source_tier] || esc(it.source_tier)}${typeof it.source_weight === "number" ? ` · წონა ×${it.source_weight.toFixed(2)}` : ""}</div>` : ""}
     <div>${tail}</div></li>`;
 }
+let marketOn = false, marketInfo = null;
+try { marketOn = localStorage.getItem("market-dynamics") === "1"; } catch (e) {}
+const OUTC = {home: "მასპინძლის მოგება", draw: "ფრე", away: "სტუმრის მოგება"};
+const spp = x => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(1);
+function spark(series) {
+  const pts = series.filter(q => isObj(q) && probs3(q.p));
+  if (pts.length < 2) return "";
+  const W = 300, H = 64, pad = 6, all = pts.flatMap(q => q.p), lo = Math.min(...all), hi = Math.max(...all), span = hi - lo || 1;
+  const x = i => pad + i * (W - 2 * pad) / (pts.length - 1), y = v => H - pad - (v - lo) * (H - 2 * pad) / span;
+  const line = (j, c) => `<polyline fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" points="${pts.map((q, i) => `${x(i).toFixed(1)},${y(q.p[j]).toFixed(1)}`).join(" ")}"/>` +
+    pts.map((q, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(q.p[j]).toFixed(1)}" r="2.2" fill="${c}"/>`).join("");
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="ბაზრის ალბათობის ცვლილება დროში">${line(0, "var(--pitch)")}${line(1, "var(--draw)")}${line(2, "var(--away)")}</svg>`;
+}
+function marketBlock(m, k) {
+  const mv = isObj(m.market_move) ? m.market_move : null, p = mv && probs3(mv.model);
+  const series = Array.isArray(m.market_series) ? m.market_series : [];
+  if (!marketOn || (!p && !series.length)) return {model: "", facts: ""};
+  if (!p) return {model: "", facts: `<div class="news press"><p class="nhead"><i class="dot no"></i><span class="t"><b>ბაზრის დინამიკა:</b> ჯერ ერთი ფასია დაფიქსირებული; ცვლილება გამოჩნდება, როცა კოეფიციენტი შეიცვლება</span></p></div>`};
+  const lbl = ["მასპ.", "ფრე", "სტუმ."];
+  const model = `<div class="nm"><div class="cap"><b>სტატისტიკა + ბაზრის დინამიკა</b>${typeof mv.over25 === "number" ? `<span>2.5-ზე მეტი ${pct(mv.over25)}</span>` : ""}</div>${bar(p)}
+    <div class="legend">${lbl.map((l, i) => `<span class="${i === k ? "hit" : ""}">${l} ${pct(p[i])}</span>`).join("")}</div></div>`;
+  const move = Array.isArray(mv.move_pp) && mv.move_pp.length === 3 ? mv.move_pp : [0, 0, 0];
+  const tag = {strong: "ძლიერი მოძრაობა", notable: "შესამჩნევი მოძრაობა", none: "მცირე მოძრაობა"}[mv.strength] || "მოძრაობა";
+  const idx = {home: 0, draw: 1, away: 2}[mv.outcome];
+  const head = idx == null ? "" : `${OUTC[mv.outcome]}: ბაზრის ალბათობა ${mv.direction === "up" ? "გაიზარდა" : "შემცირდა"} ${spp(move[idx])} პუნქტით`;
+  const from = isObj(mv.first) && isObj(mv.last) ? `${known(mv.first.t)} → ${known(mv.last.t)}, ${mv.points} დაფიქსირება` : "";
+  const ev = marketInfo && isObj(marketInfo.evidence) ? marketInfo.evidence : null;
+  const proof = ev && isObj(ev.rise_4pp) ? `<p>რას ამბობს ისტორია (${ev.matches} მატჩი, ${esc(ev.seasons)}): როცა ალბათობა 4 პუნქტით ან მეტით გაიზარდა, ძველი ფასი ამბობდა ${pct(ev.rise_4pp.earlier_price)}-ს, ახალი ${pct(ev.rise_4pp.later_price)}-ს, მოხდა ${pct(ev.rise_4pp.happened)}-ში. მოძრაობა ინფორმაციაა, მაგრამ „გაგრძელებას“ არ წინასწარმეტყველებს: ბოლო ფასი მას უკვე შეიცავს.</p>` : "";
+  const cut = typeof mv.shift_scale === "number" && mv.shift_scale < 1;
+  const facts = `<div class="news press"><details open><summary class="nhead"><i class="dot ${mv.strength === "none" ? "" : "wn"}"></i><span class="t"><b>ბაზრის დინამიკა:</b> ${head}</span></summary>
+    <div class="nbody"><p><span class="mvtag ${esc(mv.strength || "")}">${tag}</span> <span class="mono">${from}</span></p>${spark(series)}
+    <p class="mono">მასპ. ${spp(move[0])} · ფრე ${spp(move[1])} · სტუმ. ${spp(move[2])}${typeof mv.over_move_pp === "number" ? ` · 2.5-ზე მეტი ${spp(mv.over_move_pp)}` : ""} (პროცენტული პუნქტი)</p>
+    <p>მოდელის ალბათობა იმავე მიმართულებით არის გადაწეული, არაუმეტეს ${mv.max_shift_pp} პუნქტით.${cut ? ` ამ მატჩზე ზღვარი ამოქმედდა (×${mv.shift_scale.toFixed(2)}).` : ""} ეს ვარიანტი სიახლეებსა და პრეს-ფაქტორს არ ემატება: კოეფიციენტი ხშირად სწორედ იმავე ამბების გამო მოძრაობს. კუთხურებსა და ბარათებზე კოეფიციენტები არ გვაქვს, ამიტომ ისინი არ იცვლება.</p>${proof}</div></details></div>`;
+  return {model, facts};
+}
 let pressOn = false;
 try { pressOn = localStorage.getItem("press-factor") === "1"; } catch (e) {}
 function pressItem(it) {
@@ -358,17 +398,19 @@ function card(m, hasLayer) {
   const mid = played ? `<span class="score res">${m.result[0]} – ${m.result[1]}</span>` : `<span class="score">vs</span>`;
   let nb = {model: "", facts: ""}, pb = {model: "", facts: ""};
   try { pb = pressBlock(m, k); } catch (e) {}
+  let mb = {model: "", facts: ""};
+  try { mb = marketBlock(m, k); } catch (e) {}
   try { const r = newsBlock(m, played, k, hasLayer); nb = typeof r === "string" ? {model: "", facts: r} : r; } catch (e) {}
   return `<article class="card">
     <div class="when"><span>${day(m.date)} · ${m.time}</span><span>${played ? "დასრულდა" : "UK დრო"}</span></div>
     <div class="teams"><span class="a">${esc(m.home)}</span>${mid}<span>${esc(m.away)}</span></div>
-    ${nb.model ? `<div class="cap"><b>მხოლოდ სტატისტიკა</b><span>მკრთალი ზოლი: ბაზარი</span></div>` : ""}${bar(m.model)}${m.market ? bar(m.market, "mk") : ""}
-    <div class="legend">${legend}</div>${nb.model}${pb.model}
+    ${nb.model || pb.model || mb.model ? `<div class="cap"><b>მხოლოდ სტატისტიკა</b><span>მკრთალი ზოლი: ბაზარი</span></div>` : ""}${bar(m.model)}${m.market ? bar(m.market, "mk") : ""}
+    <div class="legend">${legend}</div>${nb.model}${pb.model}${mb.model}
     <div class="facts">
       <div>მოსალოდნელი გოლები<b>${m.xg[0].toFixed(2)} – ${m.xg[1].toFixed(2)}</b></div>
       <div>2.5-ზე მეტი<b>${pct(m.over25)}${m.market_over25 != null ? ` <span style="color:var(--mute);font-size:12px">/ ${pct(m.market_over25)}</span>` : ""}</b></div>
       <div>სავარაუდო ანგარიში<b>${m.score} <span style="color:var(--mute);font-size:12px">${pct(m.score_p)}</span></b></div>
-    </div>${nb.facts}${pb.facts}
+    </div>${nb.facts}${pb.facts}${mb.facts}
   </article>`;
 }
 
@@ -384,6 +426,12 @@ function render(data, lg) {
   const cardOf = m => card(m, hasLayer);
   // the switch is offered only when the feed carries a press variant for this league
   const hasPress = [...(lg.upcoming || []), ...(lg.last_round || [])].some(m => isObj(m.news) && isObj(m.news.press));
+  marketInfo = isObj(data.market_dynamics) ? data.market_dynamics : null;
+  const hasMarket = (lg.upcoming || []).some(m => Array.isArray(m.market_series) && m.market_series.length);
+  const mtg = document.getElementById("market-toggle"), mbox = document.getElementById("market-on");
+  mtg.classList.toggle("on", hasMarket);
+  mbox.checked = marketOn;
+  mbox.onchange = () => { marketOn = mbox.checked; try { localStorage.setItem("market-dynamics", marketOn ? "1" : "0"); } catch (e) {} render(data, lg); };
   const tg = document.getElementById("press-toggle"), box = document.getElementById("press-on");
   tg.classList.toggle("on", hasPress);
   box.checked = pressOn;
